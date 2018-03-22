@@ -1,0 +1,245 @@
+---
+
+title: "hw3"
+author: "Aleksandra Simdianova"
+date: '5 марта 2018 г '
+output: html_document
+---
+
+### 0 preparation data
+```{r cars, echo = F}
+# install.packages("tidyverse")
+# install.packages("readxl")
+# install.packages("mosaic")
+# install.packages("stringr")
+# install.packages("bootstrap")
+# install.packages("irr")
+# install.packages("ca")
+# install.packages("MASS")
+library(tidyverse)
+#library(readxl)
+library(dplyr)
+library(mosaic)
+#library(stringr)
+library(bootstrap)
+library(ggplot2)
+#library(irr)
+#library(ca)
+#library(MASS)
+
+words = read.csv('https://raw.githubusercontent.com/agricolamz/2018_data_analysis_for_linguists/master/data/students/sandrasimdi/hw3_binomial_ci/hw3_wodehouse.csv', encoding = "UTF-8", stringsAsFactors = F)
+```
+
+
+### 1.1 binomial test
+
+```{r}
+wrd = words %>%
+    group_by(word, chapter) %>%
+    summarise(count=n())
+
+cnts = words %>% group_by(chapter) %>%
+   summarise(n_words = n()) 
+
+cht = merge(wrd, cnts, by = "chapter")
+```
+
+
+
+```{r}
+cht %>% 
+  mutate(average = count/n_words) %>% 
+  arrange(desc(average))  ->
+  cht
+
+cht %>% 
+  filter(word == "сэр") %>% 
+  select(chapter, word, average) %>% 
+  ggplot(aes(average)) +
+  geom_histogram(fill = "lightblue")+
+  geom_density(color = "red")+
+  theme_bw()+
+  labs(title = 'Частотность слова "сэр" на основе 11 глав Вудхауза')
+
+```
+
+
+```{r}
+cht %>% 
+  filter(word == "сэр") %>% 
+  summarise(g_mean = mean(average)) ->
+  grand_mean
+grand_mean
+```
+
+
+```{r}
+cht %>% 
+  filter(word == "сэр") %>% 
+  summarise(t_mean = mean(average, trim = 0.05)) ->
+  trimmed_mean
+trimmed_mean
+```
+
+
+```{r}
+cht %>% 
+  filter(word == "сэр") %>% 
+  summarise(w_mean = weighted.mean(average, n_words)) ->
+  weighted_mean
+weighted_mean
+
+```
+###1.2 bootstrap
+
+```{r}
+set.seed(42)
+cht %>% 
+  filter(word == "сэр") ->
+  cht_bs
+
+cht_bs <- bootstrap(cht_bs$average, nboot = 10000, theta = mean)$thetastar
+
+# ggplot работает только с датафреймами
+cht_bs <- data_frame(means = cht_bs)  
+
+cht_bs %>% 
+  ggplot(aes(means)) +
+  geom_histogram(fill = "lightblue")+
+  theme_bw()+
+  labs(title = 'Средняя доля слова "сэр" на основе 11 глав Вудхауза', subtitle = "На основе 10000 бутстрэп-подвыборок")
+
+```
+
+
+```{r}
+#cht_bs %>%
+#  summarise(mean = mean(means),
+#            q1 = quantile(means, 0.025),
+#            q2 = quantile(means, 0.975))->
+#  cht_stats
+```
+
+
+```{r}
+cht_bs %>%
+  summarise(CI_size = - quantile(means, 0.025) + quantile(means, 0.975))->
+  cht_stats
+
+cht_stats
+```
+
+```{r}
+cht_bs %>% 
+  ggplot(aes(means)) +
+  geom_histogram(fill = "lightblue")+
+  theme_bw()+
+  labs(title = 'Средняя доля слова "сэр" на основе 11 глав Вудхауза', subtitle = "Среднее и 95% бутстрэпнутый доверительный интервал на основе 10000 бутстрэп-подвыборок")+
+  geom_vline(xintercept = unlist(cht_stats), lty = c(2, 3, 3))
+
+```
+
+### 1.3 confidence interval
+```{r}
+cht %>% 
+  filter(word == "сэр") %>%
+  slice(1:30) %>% 
+  group_by(chapter) %>% 
+  mutate(low_ci = binom.test(x = count, n = n_words, ci.method = "Clopper-Pearson")$conf.int[1],
+         up_ci = binom.test(x = count, n = n_words, ci.method = "Clopper-Pearson")$conf.int[2]) %>%
+  ggplot(aes(chapter, average))+
+  geom_point()+
+  geom_pointrange(aes(ymin = low_ci, ymax = up_ci))+
+  theme_bw()+
+  coord_flip()+
+  labs(title = 'Среднее и 95% CI употребления "сэр" в рассказах Вудхауза',
+       x = "", y = "")
+```
+
+
+```{r}
+cht %>% 
+  filter(word == "сэр") %>%
+  slice(1:30) %>% 
+  group_by(chapter) %>% 
+  mutate(low_ci = binom.test(x = count, n = n_words, ci.method = "Clopper-Pearson")$conf.int[1],
+         up_ci = binom.test(x = count, n = n_words, ci.method = "Clopper-Pearson")$conf.int[2]) ->
+  cht_ints
+
+cht_ints$CI_size = cht_ints$up_ci - cht_ints$low_ci
+
+cht_ints[cht_ints$CI_size == max(cht_ints$CI_size),c(1,8)]
+```
+
+###1.4 max bayes interval
+```{r}
+
+cht %>% 
+  filter(word == "сэр") %>% 
+  select(chapter, word, average) %>% 
+  ggplot(aes(average)) +
+  geom_histogram(fill = "lightblue")+
+  geom_density(color = "red")+
+  theme_bw()+
+  labs(title = 'Частотность слова "сэр" на основе 11 глав Вудхауза')
+
+
+mu <- mean(cht$average[cht$word == "сэр"])
+var <- var(cht$average[cht$word == "сэр"])
+alpha0 <- ((1 - mu) / var - 1 / mu) * mu ^ 2
+beta0 <- alpha0 * (1 / mu - 1)
+
+
+
+x <- seq(0, 0.1, length = 1000)
+estimation <- data_frame(
+  x = x,
+  density = c(dbeta(x, shape1 = alpha0, shape2 = beta0)))
+
+cht %>% 
+  filter(word == "сэр") %>% 
+  select(chapter, word, average) %>% 
+  ggplot(aes(average)) +
+  geom_density(fill = "lightblue")+
+  geom_line(data = estimation, aes(x, density))+
+  theme_bw()+
+  labs(title = 'Частотность слова "сэр" на основе 11 глав Вудхауза',
+       subtitle = "черной линией показано бета распределение с α = 2.29 и β = 328.445")
+```
+
+
+```{r}
+
+cht %>% 
+  filter(word == "сэр") %>%
+  slice(1:30) %>% 
+  group_by(chapter) %>% 
+  mutate(alpha_post = count+alpha0,
+         beta_post = n_words-count+beta0,
+         average_post = alpha_post/(alpha_post+beta_post),
+         cred_int_l = qbeta(.025, alpha_post, beta_post),
+         cred_int_h = qbeta(.975, alpha_post, beta_post)) ->
+  posterior
+
+posterior$CI_size = posterior$cred_int_h - posterior$cred_int_l
+
+posterior[posterior$CI_size == max(posterior$CI_size),c(1,10)]
+```
+###1.5
+
+```{r}
+cht_ints[cht_ints$CI_size == min(cht_ints$CI_size),c(1,8)]
+```
+###1.6
+
+```{r}
+posterior[posterior$CI_size == min(posterior$CI_size),c(1,10)]
+```
+
+###1.7 
+
+Частота употребления слова "сэр" невероятным образом зависит от контекста. 
+В 3-й главе -- в которой байесовский интервал минимален, слово "сэр" встречается сравнительно мало по сравнению со второй главой -- 8 по сравнению с 35, это обосновано тем, что Дживс и Вустер не беседуют - чаще всего "сэр" встречается именно в диалогах. Размер доверительного интервала зависит скорее от общего количества, нежели от целевого события  (наименьший average кол-ва слов "сэр")
+Так, в главе №6 размером 2117 слов доверительный интервал шире, чем в главе №3 размером 6833 слова, хотя слово сэр упоминается в 8 раз реже. 
+Из этого мы делаем вывод, что доверительный интервал тем меньше, чем более мы уверены в репрезентативности выборки.
+По той же причине большой доверительный интервал для главы 12: это самая маленькая (после 3-й глава), в которой чаще всего (после 5-й, 11-й, 14-й) встречается нужное нам слово. 
