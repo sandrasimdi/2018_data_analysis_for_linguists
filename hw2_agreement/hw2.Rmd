@@ -1,0 +1,123 @@
+---
+title: "2_binom"
+author: "Aleksandra Simdianova"
+date: '18 февраля 2018 г '
+output: html_document
+---
+
+### 0 preparation data
+```{r cars, echo = F}
+# install.packages("tidyverse")
+# install.packages("readxl")
+# install.packages("mosaic")
+# install.packages("stringr")
+# install.packages("bootstrap")
+# install.packages("irr")
+# install.packages("ca")
+# install.packages("MASS")
+library(tidyverse)
+library(readxl)
+library(mosaic)
+library(stringr)
+library(bootstrap)
+library(irr)
+library(ca)
+library(MASS)
+```
+
+```{r}
+# setting work directory
+setwd('C:\\Users\\Packard bell\\Documents\\r_moroz')
+# reading file
+bin = read.csv('hw2_binomial.csv', encoding = "UTF-8", stringsAsFactors = F)
+# zilo = as_tibble(zilo)
+```
+
+### 1.1 binomial test
+
+```{r}
+binomial_test <- binom.test(bin$k[1],bin$n[1], bin$prior[1])
+binomial_test
+```
+
+###1.2 simulation
+
+```{r}
+set.seed(42)
+do(1000)*
+  sum(sample(x = 1:0, 
+             size = bin$n[1], 
+             prob = c(bin$prior[1], 1 - bin$prior[1]), 
+             replace = TRUE)) ->
+  simulations
+simulations %>% 
+  mutate(greater = sum >= bin$k[1]) %>% 
+  count(greater)
+```
+
+```{r}
+simulations %>% 
+  ggplot(aes(sum))+
+  geom_density(fill = "lightblue")+
+  geom_vline(xintercept = bin$k[1], linetype = 2)+
+  theme_bw()+
+  labs(title = "Распределение 1000 симуляций с параметрами n = 128, p = 0.275")
+```
+
+###1.3 average aposteriori
+```{r}
+n = bin$n[1]
+k = bin$k[1]
+pri = bin$prior[1]
+
+al_pri <- pri * n
+beta_pri = (1-pri) * n
+
+al_data = k
+beta_data = n - k
+
+al_post = al_pri + al_data
+beta_post = beta_pri + beta_data
+
+x <- seq(0, 1, length = 100)
+data_frame(p = rep(x, 3),
+           density = c(dbeta(x, al_pri, beta_pri),
+                       dbeta(x, al_data, beta_data),
+                       dbeta(x, al_post, beta_post)),
+           type = rep(c("prior", "likelihood", "posterior"), each = 100))%>% 
+  ggplot(aes(x = p, y = density, color = type))+
+  geom_line()+
+  theme_bw()
+```
+
+```{r}
+al_post/(al_post+beta_post)
+```
+
+three charts above looks similar, and average aposteriori probability 0.001 smaller than apriori prob.  
+
+### 1.4 uninformative average aposteriori 
+```{r}
+
+x <- seq(0, 1, length = 100)
+data_frame(p = rep(x, 3),
+           density = c(dbeta(x, 1, 1),
+                       dbeta(x, al_data, beta_data),
+                       dbeta(x, al_data + 1, beta_data + 1)),
+           type = rep(c("prior", "likelihood", "posterior"), each = 100))%>% 
+  ggplot(aes(x = p, y = density, color = type))+
+  geom_line()+
+  theme_bw()
+```
+```{r}
+(al_data + 1)/(al_data + 1 + beta_data + 1)
+```
+
+Даже визуально можно увидеть, что пик кривых правдоподобия и апостериорной вероятности приходится практически на те же 0.275, что и графиком выше. 
+
+В связи с чем можем плавно перейти к выводам. 
+
+### 1.5 
+Ожидаемая вероятность успеха для события из эксперимента, который мы проводили, 0.2748, а по итогам эксперимента событие произошло с вероятностью 0.2734.
+Признаться честно, не так часто эксперименты подтверждают данные предыдущих исследований настолько - большая удача. 
+Разумеется, что при таком совпадении и вероятность по итогам симуляции (в которой 35 успехов из 128 стали границей, делящей 1000 прогонов кода почти пополам) отличалась незначительно, и среднее апостериорного и апостериорного ненормативного распределения (0.274 и 0.277 соответственно)
