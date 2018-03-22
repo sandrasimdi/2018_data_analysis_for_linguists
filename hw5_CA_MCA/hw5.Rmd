@@ -1,0 +1,68 @@
+---
+
+title: "hw5_CA_MCA"
+author: "Aleksandra Simdianova"
+date: '5 марта 2018 г '
+output: html_document
+---
+
+### 0 preparation data
+```{r cars, echo = F}
+# install.packages("tidyverse")
+# install.packages("readxl")
+# install.packages("mosaic")
+# install.packages("stringr")
+# install.packages("bootstrap")
+# install.packages("irr")
+#install.packages("GGally")
+library(tidyverse)
+library(GGally)
+library(ca)
+words = read.csv('https://github.com/agricolamz/2018_data_analysis_for_linguists/raw/master/data/students/sandrasimdi/hw5_CA_MCA/hw5_chairs.csv', encoding = "UTF-8")#, stringsAsFactors = F)
+colreg = read.csv('https://raw.githubusercontent.com/agricolamz/2018_data_analysis_for_linguists/master/data/students/sandrasimdi/hw5_CA_MCA/hw5_colreg.csv')
+```
+
+
+### 1.1 MCA 
+
+```{r}
+MCA <- MASS::mca(words[,-c(1:3)])
+words <- cbind(words, MCA$rs)
+variables <- as_data_frame(MCA$cs)
+variables$var_names <- rownames(MCA$cs)
+words %>% 
+  ggplot(aes(`1`, `2`))+
+  geom_point(aes(color = Category))+
+  stat_ellipse(aes(color = Category))+
+  geom_text(data = variables, aes(`1`, `2`, label = var_names), size = 2)+
+  theme_bw()+
+  scale_x_continuous(limits = c(-0.015, 0.02))
+```
+###1.2
+Эллипсы довольно точно (для первичного приближения кластеризации) дают разбиение слов на столы и стулья.
+Соответственно, можем увидеть, что перетягивает каждую из фич в свою угол -- например, на Stuhl влияет возраст ребёнка
+
+### 2.1
+```{r}
+rownames(colreg) = as.character(rownames(colreg))
+ca = ca(colreg)
+# summary(ca)
+colreg_col <- data.frame(ca$colcoord)
+colreg_col$rows <- rownames(ca$colcoord)
+
+colreg_row <- data.frame(ca$rowcoord)
+colreg_row$rows <- rownames(ca$rowcoord)
+
+colreg_col %>% 
+  ggplot(aes(Dim1, Dim2, label = rows))+
+  geom_text(color = "blue")+
+  geom_text(data = colreg_row, color = "red")+
+  theme_bw()+
+  labs(x = "Dim1 (42.1%)",
+       y = "Dim2 (32.6%)")
+```
+
+###2.2
+
+Так как scree plot для 2 измерений даёт 97.1 кумулятивных процентов, можно сказать, что мы проводим сжатие без потери точности.
+Судля по тому, как разбросаны цвета-фичи по графику, можно увидеть, что все цвета могут ярковыраженно приближаться "к своему фавориту" (как 2 и 3 уверенно к fiction),а 1-й -- очень близко к spoken
